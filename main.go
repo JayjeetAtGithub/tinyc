@@ -48,24 +48,25 @@ func main() {
 func run(command ...string) {
 	cmd := exec.Command("/proc/self/exe", append([]string{"child"}, command[0:]...)...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags: syscall.CLONE_NEWPID  | 
-		            syscall.CLONE_NEWNS   | 
+		Cloneflags: syscall.CLONE_NEWPID  |
+		            syscall.CLONE_NEWNS   |
+                            syscall.CLONE_NEWNET  |
 		            syscall.CLONE_NEWUSER |
-					syscall.CLONE_NEWUTS,
-					UidMappings: []syscall.SysProcIDMap{
+			    syscall.CLONE_NEWUTS,
+		            UidMappings: []syscall.SysProcIDMap{
 						{
 							ContainerID: 0,
 							HostID:      os.Getuid(),
 							Size:        1,
 						},
-					},
-					GidMappings: []syscall.SysProcIDMap{
+			    },
+			    GidMappings: []syscall.SysProcIDMap{
 						{
 							ContainerID: 0,
 							HostID:      os.Getgid(),
 							Size:        1,
 						},
-					},
+			    },
 	            }
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
