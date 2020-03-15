@@ -23,7 +23,7 @@ func setCgroups() {
 	os.Mkdir(filepath.Join(mem, "container"), 0755)
 
 	check(ioutil.WriteFile(filepath.Join(mem, "container/memory.limit_in_bytes"),
-		[]byte("999424"), 0700))
+		[]byte("5000000"), 0700))
 	check(ioutil.WriteFile(filepath.Join(mem, "container/notify_on_release"),
 		[]byte("1"), 0700))
 
@@ -51,9 +51,9 @@ func run(command ...string) {
 		Cloneflags: syscall.CLONE_NEWPID  |
 					syscall.CLONE_NEWNS   |
 					syscall.CLONE_NEWIPC  |
-                            syscall.CLONE_NEWNET  |
+                    syscall.CLONE_NEWNET  |
 		            syscall.CLONE_NEWUSER |
-			    syscall.CLONE_NEWUTS,
+			        syscall.CLONE_NEWUTS,
 		            UidMappings: []syscall.SysProcIDMap{
 						{
 							ContainerID: 0,
@@ -83,6 +83,10 @@ func run(command ...string) {
 func child(command ...string) {
 	setCgroups()
 
+	check(os.Setenv("PS1", "root@container~#"))
+	check(os.Setenv("HOME", "/"))
+	check(os.Setenv("USER", "/root"))
+	
 	cmd := exec.Command(command[0], command[1:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
