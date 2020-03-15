@@ -85,8 +85,8 @@ func child(command ...string) {
 	cmd.Stderr = os.Stderr
 
 	check(syscall.Sethostname([]byte("simple_container.local")))
-	check(syscall.Chroot("./alpine"))
-	check(os.Chdir("./alpine"))
+	check(syscall.Chroot("./rootfs"))
+	check(os.Chdir("./rootfs"))
 	check(syscall.Mount("proc", "proc", "proc", 0, ""))
 	check(syscall.Mount("tmp", "tmp", "tmpfs", 0, ""))
 
