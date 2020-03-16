@@ -12,6 +12,7 @@ import (
 )
 
 func check(err error) {
+	// if err, panic
 	if err != nil {
 		panic(err)
 	}
