@@ -100,6 +100,7 @@ func run(command ...string) {
 				Size:        1,
 			},
 		},
+		Unshareflags: syscall.CLONE_NEWNS,
 	}
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
