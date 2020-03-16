@@ -80,6 +80,7 @@ func run(command ...string) {
 	// Run the container process in new namespaces
 	cmd := exec.Command("/proc/self/exe", append([]string{"container"}, command[0:]...)...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
+                Unshareflags: syscall.CLONE_NEWNS,
 		Cloneflags: syscall.CLONE_NEWNS |
 			syscall.CLONE_NEWUTS |
 			syscall.CLONE_NEWNET |
