@@ -1,35 +1,71 @@
 package main
 
 import (
-	"fmt"
-	"os"
-	"log"
-	"os/exec"
 	"io/ioutil"
-	"syscall"
+	"log"
+	"os"
+	"os/exec"
+	"os/user"
 	"path/filepath"
 	"strconv"
+	"syscall"
 )
 
 func check(err error) {
-	if err !=  nil {
+	if err != nil {
 		panic(err)
 	}
 }
 
+func setupEnvironment() {
+	// Set USER, HOME environment variables
+	if os.Getuid() == 0 {
+		check(os.Setenv("USER", "root"))
+		check(os.Setenv("HOME", "/root"))
+	} else {
+		u, err := user.Current()
+		check(err)
+		check(os.Setenv("USER", u.Username))
+		check(os.Setenv("HOME", filepath.Join("/home/", u.Username)))
+	}
+
+	// Set the hostnames, PS1, PATH environment variables
+	check(syscall.Sethostname([]byte("container.local")))
+	check(os.Setenv("PS1", "$USER@$HOSTNAME:$PWD~$ "))
+	check(os.Setenv("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"))
+}
+
 func setCgroups() {
-	cgroups := "/sys/fs/cgroup"
-	mem := filepath.Join(cgroups, "memory")
-	os.Mkdir(filepath.Join(mem, "container"), 0755)
-
-	check(ioutil.WriteFile(filepath.Join(mem, "container/memory.limit_in_bytes"),
-		[]byte("5000000"), 0700))
-	check(ioutil.WriteFile(filepath.Join(mem, "container/notify_on_release"),
-		[]byte("1"), 0700))
-
+	// Set the CGroups
 	pid := strconv.Itoa(os.Getpid())
-	check(ioutil.WriteFile(filepath.Join(mem, "container/cgroup.procs"),
+	cgroups := "/sys/fs/cgroup"
+	memoryCgroup := filepath.Join(cgroups, "memory")
+	cpuCgroup := filepath.Join(cgroups, "cpu")
+
+	os.Mkdir(filepath.Join(memoryCgroup, "container"), 0755)
+	os.Mkdir(filepath.Join(cpuCgroup, "container"), 0755)
+
+	// Limit to 2 Mb memory only
+	check(ioutil.WriteFile(filepath.Join(memoryCgroup, "container/memory.limit_in_bytes"),
+		[]byte("2000000"), 0700))
+	check(ioutil.WriteFile(filepath.Join(memoryCgroup, "container/notify_on_release"),
+		[]byte("1"), 0700))
+	check(ioutil.WriteFile(filepath.Join(memoryCgroup, "container/cgroup.procs"),
 		[]byte(pid), 0700))
+
+	// Limit to 1 CPU only
+	check(ioutil.WriteFile(filepath.Join(cpuCgroup, "container/cpu.shares"),
+		[]byte("1"), 0700))
+	check(ioutil.WriteFile(filepath.Join(cpuCgroup, "container/notify_on_release"),
+		[]byte("1"), 0700))
+	check(ioutil.WriteFile(filepath.Join(cpuCgroup, "container/cgroup.procs"),
+		[]byte(pid), 0700))
+}
+
+func deleteCgroups() {
+	// Delete the cgroups
+	check(exec.Command("/usr/bin/cgdelete memory:container").Run())
+	check(exec.Command("/usr/bin/cgdelete cpu:container").Run())
 }
 
 func main() {
@@ -37,8 +73,8 @@ func main() {
 	case "run":
 		run(os.Args[2:]...)
 
-	case "child":
-		child(os.Args[2:]...)
+	case "container":
+		container(os.Args[2:]...)
 
 	case "default":
 		log.Fatal("Unknown command.")
@@ -46,64 +82,64 @@ func main() {
 }
 
 func run(command ...string) {
-	cmd := exec.Command("/proc/self/exe", append([]string{"child"}, command[0:]...)...)
+	// Run the container process in new namespaces
+	cmd := exec.Command("/proc/self/exe", append([]string{"container"}, command[0:]...)...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags: syscall.CLONE_NEWPID  |
-			    syscall.CLONE_NEWNS   |
-			    syscall.CLONE_NEWIPC  |
-                            syscall.CLONE_NEWNET  |
-		            syscall.CLONE_NEWUSER |
-			    syscall.CLONE_NEWUTS,
-		            UidMappings: []syscall.SysProcIDMap{
-						{
-							ContainerID: 0,
-							HostID:      os.Getuid(),
-							Size:        1,
-						},
-			    },
-			    GidMappings: []syscall.SysProcIDMap{
-						{
-							ContainerID: 0,
-							HostID:      os.Getgid(),
-							Size:        1,
-						},
-			    },
-	    }
+		Cloneflags: syscall.CLONE_NEWPID |
+			syscall.CLONE_NEWNS |
+			syscall.CLONE_NEWIPC |
+			syscall.CLONE_NEWNET |
+			syscall.CLONE_NEWUSER |
+			syscall.CLONE_NEWUTS,
+		UidMappings: []syscall.SysProcIDMap{
+			{
+				ContainerID: 0,
+				HostID:      os.Getuid(),
+				Size:        1,
+			},
+		},
+		GidMappings: []syscall.SysProcIDMap{
+			{
+				ContainerID: 0,
+				HostID:      os.Getgid(),
+				Size:        1,
+			},
+		},
+	}
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-
-	err := cmd.Run()
-	if err != nil {
-		fmt.Println("ERROR: ", err)
-		os.Exit(1)
-	}
+	check(cmd.Run())
 }
 
-func child(command ...string) {
+func container(command ...string) {
+	// Set the control groups
 	setCgroups()
 
-	check(os.Setenv("PS1", "root@container~#"))
-	check(os.Setenv("HOME", "/"))
-	check(os.Setenv("USER", "/root"))
-	
+	// Set the environment vars
+	setupEnvironment()
+
+	// Chroot into the root file system
+	check(syscall.Chroot("./rootfs"))
+	check(os.Chdir("./rootfs"))
+
+	// Make the necessary mounts
+	check(syscall.Mount("proc", "proc", "proc", syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_NOEXEC, ""))
+	check(syscall.Mount("tmpfs", "tmp", "tmpfs", syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_NOEXEC, ""))
+	check(syscall.Mount("sysfs", "sys", "sysfs", syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_NOEXEC, ""))
+
+	// Execute the command in the container process
 	cmd := exec.Command(command[0], command[1:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	check(cmd.Run())
 
-	check(syscall.Sethostname([]byte("container")))
-	check(syscall.Chroot("./rootfs"))
-	check(os.Chdir("./rootfs"))
-	check(syscall.Mount("proc", "proc", "proc", 0, ""))
-	check(syscall.Mount("tmp", "tmp", "tmpfs", 0, ""))
-
-	err := cmd.Run()
-	if err != nil {
-		fmt.Println("ERROR: ", err)
-		os.Exit(1)
-	}
-
+	// Unmount the mounts
 	check(syscall.Unmount("proc", 0))
 	check(syscall.Unmount("tmp", 0))
+	check(syscall.Unmount("sys", 0))
+
+	// Delete Cgroups
+	deleteCgroups()
 }
