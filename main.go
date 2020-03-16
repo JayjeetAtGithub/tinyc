@@ -36,9 +36,9 @@ func setupEnvironment() {
 	check(os.Setenv("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"))
 }
 
-func setCgroups() {
+func setupCgroups() {
 	// Set the CGroups
-	pid := strconv.Itoa(os.Getpid())
+	pid := os.Getpid()
 	cgroups := "/sys/fs/cgroup"
 	memoryCgroup := filepath.Join(cgroups, "memory")
 	cpuCgroup := filepath.Join(cgroups, "cpu")
@@ -52,7 +52,7 @@ func setCgroups() {
 	check(ioutil.WriteFile(filepath.Join(memoryCgroup, "container/notify_on_release"),
 		[]byte("1"), 0700))
 	check(ioutil.WriteFile(filepath.Join(memoryCgroup, "container/cgroup.procs"),
-		[]byte(pid), 0700))
+		[]byte(strconv.Itoa(pid)), 0700))
 
 	// Limit to 1 CPU only
 	check(ioutil.WriteFile(filepath.Join(cpuCgroup, "container/cpu.shares"),
@@ -60,13 +60,7 @@ func setCgroups() {
 	check(ioutil.WriteFile(filepath.Join(cpuCgroup, "container/notify_on_release"),
 		[]byte("1"), 0700))
 	check(ioutil.WriteFile(filepath.Join(cpuCgroup, "container/cgroup.procs"),
-		[]byte(pid), 0700))
-}
-
-func deleteCgroups() {
-	// Delete the cgroups
-	check(exec.Command("/usr/bin/cgdelete memory:container").Run())
-	check(exec.Command("/usr/bin/cgdelete cpu:container").Run())
+		[]byte(strconv.Itoa(pid)), 0700))
 }
 
 func main() {
@@ -115,7 +109,7 @@ func run(command ...string) {
 
 func container(command ...string) {
 	// Set the control groups
-	setCgroups()
+	setupCgroups()
 
 	// Set the environment vars
 	setupEnvironment()
@@ -124,12 +118,16 @@ func container(command ...string) {
 	check(syscall.Chroot("./rootfs"))
 	check(os.Chdir("./rootfs"))
 
+	cwd, _ := os.Getwd()
+	log.Println("$PWD: ", cwd)
+
 	// Make the necessary mounts
 	check(syscall.Mount("proc", "proc", "proc", syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_NOEXEC, ""))
 	check(syscall.Mount("tmpfs", "tmp", "tmpfs", syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_NOEXEC, ""))
 	check(syscall.Mount("sysfs", "sys", "sysfs", syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_NOEXEC, ""))
 
 	// Execute the command in the container process
+	log.Println("Executing: ", command[0])
 	cmd := exec.Command(command[0], command[1:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -140,7 +138,4 @@ func container(command ...string) {
 	check(syscall.Unmount("proc", 0))
 	check(syscall.Unmount("tmp", 0))
 	check(syscall.Unmount("sys", 0))
-
-	// Delete Cgroups
-	deleteCgroups()
 }
