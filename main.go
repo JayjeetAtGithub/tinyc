@@ -118,8 +118,8 @@ func container(command ...string) {
 	check(syscall.Chroot("./rootfs"))
 	check(os.Chdir("/"))
 
-	cwd, _ := os.Getwd()
-	log.Println("$PWD: ", cwd)
+	log.Println("GROUP: ", os.Getgid())
+	log.Println("USER: ", os.Getuid())
 
 	// Make the necessary mounts
 	check(syscall.Mount("proc", "proc", "proc", syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_NOEXEC, ""))
