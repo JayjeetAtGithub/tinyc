@@ -1,5 +1,8 @@
 ## A simple container implementation in Go
 
 ```
-./tinyc run /bin/bash
+mkdir -p rootfs/
+tar -C rootfs/ -xvf rootfs.tar
+go build main.go
+./main run /bin/sh
 ```
