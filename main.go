@@ -116,7 +116,7 @@ func container(command ...string) {
 
 	// Chroot into the root file system
 	check(syscall.Chroot("./rootfs"))
-	check(os.Chdir("./rootfs"))
+	check(os.Chdir("/"))
 
 	cwd, _ := os.Getwd()
 	log.Println("$PWD: ", cwd)
