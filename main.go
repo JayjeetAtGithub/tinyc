@@ -64,6 +64,7 @@ func setupCgroups() {
 }
 
 func main() {
+        // driver function
 	switch os.Args[1] {
 	case "run":
 		run(os.Args[2:]...)
@@ -85,8 +86,25 @@ func run(command ...string) {
 			syscall.CLONE_NEWUTS |
 			syscall.CLONE_NEWNET |
 			syscall.CLONE_NEWIPC |
+                        syscall.CLONE_NEWUSER |
 			syscall.CLONE_NEWPID,
+                UidMappings: []syscall.SysProcIDMap{
+                                                {
+							ContainerID: 0,
+							HostID:      os.Getuid(),
+							Size:        1,
+						},
+			    },
+	        GidMappings: []syscall.SysProcIDMap{
+						{
+							ContainerID: 0,
+							HostID:      os.Getgid(),
+							Size:        1,
+						},
+			    },
 	}
+
+        // bind the proc's STDIN, STDOUT, STDERR to the os's
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -101,31 +119,9 @@ func container(command ...string) {
 	setupEnvironment()
 
 	// Chroot into the root file system
-	newRoot := "./fs"
-	oldRoot := filepath.Join(newRoot, ".oldroot")
-        check(os.MkdirAll(oldRoot, 0700))
-
-	err_1 := syscall.Mount(newRoot, newRoot, "", syscall.MS_BIND|syscall.MS_REC, "")
-	if err_1 != nil {
-		log.Println("Error while mounting")
-	}
-
-	err_2 := syscall.PivotRoot(newRoot, oldRoot)
-	if err_2 != nil {
-		log.Println("Error while pivoting", err_2)
-	}
-
+	newRoot := "/home/vagrant/rootfs"
+	check(syscall.Chroot(newRoot))
 	check(os.Chdir("/"))
-
-	err_3 := syscall.Unmount("/.oldroot", syscall.MNT_DETACH)
-	if err_3 != nil {
-		log.Println("Error while unmounting", err_3)
-	}
-
-	err_4 := os.Remove("/.oldroot")
-	if err_4 != nil {
-		log.Println("Error while removing old root", err_4)
-	}
 
 	log.Println("GROUP: ", os.Getgid())
 	log.Println("USER: ", os.Getuid())
