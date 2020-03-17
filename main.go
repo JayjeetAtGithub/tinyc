@@ -3,6 +3,7 @@ package main
 import (
 	"io/ioutil"
 	"log"
+	"fmt"
 	"os"
 	"os/exec"
 	"os/user"
@@ -16,6 +17,38 @@ func check(err error) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func downloadImage(imageRef string) {
+	cmd := exec.Command("docker", "pull", imageRef)
+        cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+        err := cmd.Run()
+        if err != nil {
+		panic(err)
+	} else {
+		fmt.Printf("Pulled image: %v \n", imageRef)
+		convertImageToContainer(imageRef)
+	}
+}
+
+func convertImageToContainer(imageRef string) {
+	cmd := exec.Command("docker", "run", "--name", "tinyc", imageRef)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+        err := cmd.Run()
+	if err != nil {
+		panic(err)
+	} else {
+		exec.Command("docker", "export", "--output=tinyc.tar", "tinyc").Run()
+        	os.Mkdir("/home/tinycfs", 0700)
+        	exec.Command("tar", "-C", "/home/tinycfs", "-xf", "tinyc.tar").Run()
+
+		// Clean things up
+		exec.Command("docker", "rm", "-f", "tinyc").Run()
+                os.Remove("tinyc.tar")
+        }
 }
 
 func setupEnvironment() {
@@ -32,7 +65,6 @@ func setupEnvironment() {
 
 	// Set the hostnames, PS1, PATH environment variables
 	check(syscall.Sethostname([]byte("container.local")))
-	check(os.Setenv("PS1", "$USER@$HOSTNAME:$PWD~$ "))
 	check(os.Setenv("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"))
 }
 
@@ -64,10 +96,11 @@ func setupCgroups() {
 }
 
 func main() {
-        // driver function
+        // Driver function
 	switch os.Args[1] {
 	case "run":
-		run(os.Args[2:]...)
+		downloadImage(os.Args[2])
+		run(os.Args[3:]...)
 
 	case "container":
 		container(os.Args[2:]...)
@@ -119,12 +152,12 @@ func container(command ...string) {
 	setupEnvironment()
 
 	// Chroot into the root file system
-	newRoot := "/home/vagrant/rootfs"
+	newRoot := "/home/tinycfs"
 	check(syscall.Chroot(newRoot))
 	check(os.Chdir("/"))
 
-	log.Println("GROUP: ", os.Getgid())
-	log.Println("USER: ", os.Getuid())
+	log.Println("Group: ", os.Getgid())
+	log.Println("User: ", os.Getuid())
 
 	// Make the necessary mounts
 	check(syscall.Mount("proc", "proc", "proc", syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_NOEXEC, ""))
