@@ -1,8 +1,7 @@
 ## A simple container implementation in Go
 
 ```
-mkdir -p rootfs/
-tar -C rootfs/ -xvf rootfs.tar
+sudo su
 go build main.go
-sudo ./main run /bin/sh
+./main run <image:tag> <command>
 ```
