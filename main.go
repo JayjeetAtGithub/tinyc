@@ -49,13 +49,18 @@ func convertImageToFS(image string) {
 	if runErr != nil {
 		log.Fatalf("Failed to run the container: %v\n", runErr.Error())
 	} else {
-		// extract the tar into a file system dir
+		// export the file system to a tar archive
 		exportErr := execute("docker", "export", "--output=tinyc.tar", "tinyc")
 		if exportErr != nil {
 			log.Fatalf("Failed to export container to tar: %v\n", exportErr.Error())
 		}
 		os.Mkdir("/home/tinycfs", 0700)
-		exec.Command("tar", "-C", "/home/tinycfs", "-xf", "tinyc.tar").Run() //
+
+		// extract the file system tar archive
+		tarErr := execute("tar", "-C", "/home/tinycfs", "-xf", "tinyc.tar")
+		if tarErr != nil {
+			log.Fatalf("Failed to unarchive the fs tar: %v\n", tarErr.Error())
+		}
 
 		// remove the intermediate container and .tar archives
 		rmErr := execute("docker", "rm", "-f", "tinyc")
