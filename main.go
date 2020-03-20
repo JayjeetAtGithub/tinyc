@@ -38,7 +38,7 @@ func prepareImage(image string) {
 	if err != nil {
 		log.Fatalf("Failed to pull image from Docker registry: %v\n", err.Error())
 	}
-	fmt.Printf("Pulled image: %v\n", image)
+	log.Printf("Pulled image: %v\n", image)
 	convertImageToFS(image)
 }
 
