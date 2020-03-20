@@ -1,6 +1,6 @@
 # TinyC
 
-> A simple container implementation in Go for learning about containers, images, Linux namespaces, CGroups, Go Lang, etc.
+> A simple container implementation in Go for learning about containers, images, linux namespaces, cgroups, go lang, etc.
 
 ### Running Instructions
 ```
